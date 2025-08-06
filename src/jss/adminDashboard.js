@@ -15,7 +15,8 @@ import {
 } from "firebase/firestore";
 import { auth, db, secondaryAuth } from "../firebaseConfig";
 
-/* ───────────── Yardımcı ───────────── */
+const ANSWER_KEY_REGEX = /^(\d+\/[A-D](,\s*\d+\/[A-D])*)$/i;
+
 const genTempPass = () =>
   Array.from({ length: 10 }, () =>
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".charAt(
@@ -110,14 +111,34 @@ export default function AdminDashboard() {
     name: "",
     link: "",
     questionCount: "",
+    answerKey: "",
   });
-  const handleTestChange = (e) =>
-    setTestData((p) => ({ ...p, [e.target.name]: e.target.value }));
+  
+  const handleTestChange = (e) => {
+    const { name, value } = e.target;
+
+    // Test verilerini güncelle
+    setTestData((prev) => ({ ...prev, [name]: value }));
+
+    // Cevap anahtarı alanı yazılırken canlı doğrulama
+    if (name === "answerKey") {
+      setAnswerKeyErr(
+        value === "" || ANSWER_KEY_REGEX.test(value)
+          ? ""                                   // geçerli (veya boş) → hata yok
+          : "Format: 1/A,2/B,3/C …"              // geçersiz → mesaj göster
+      );
+    }
+  };
 
   const handleAddTest = async (e) => {
     e.preventDefault();
-    const { collection: coll, grade, name, link, questionCount } = testData;
-    if (!coll || !grade || !name || !link || !questionCount) return;
+    const { collection: coll, grade, name, link, questionCount, answerKey } = testData;
+    if (!coll || !grade || !name || !link || !questionCount || !answerKey) return;
+
+    if (!ANSWER_KEY_REGEX.test(answerKey)) {
+      setAnswerKeyErr("Format: 1/A,2/B,3/C …");
+      return;
+    }
 
     try {
       await addDoc(collection(db, coll), {
@@ -125,6 +146,7 @@ export default function AdminDashboard() {
         name,
         link,
         questionCount: Number(questionCount),
+        answerKey,                // 👈 Firestore’a ham metin olarak kaydet
         createdAt: serverTimestamp(),
       });
       setTestData({
@@ -133,6 +155,7 @@ export default function AdminDashboard() {
         name: "",
         link: "",
         questionCount: "",
+        answerKey: "",           // 👈 temizle
       });
       fetchStats();
       alert("Test kaydedildi.");
@@ -163,6 +186,16 @@ export default function AdminDashboard() {
     } catch (err) {
       alert(err.message);
     }
+  };
+
+  const [answerKeyErr, setAnswerKeyErr] = useState("");
+  const handleAnswerKeyBlur = () => {
+    if (!testData.answerKey) return;           // boşken hata verme
+    setAnswerKeyErr(
+      ANSWER_KEY_REGEX.test(testData.answerKey)
+        ? ""                                   // geçerli
+        : "Format: 1/A,2/B,3/C …"              // mesaj
+    );
   };
 
   /* ───────────── Deneme ekleme ───────────── */
@@ -381,6 +414,35 @@ export default function AdminDashboard() {
                     className="w-full rounded-md bg-neutral-800 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                     required
                   />
+                </div>
+
+                {/* Cevap anahtarı */}
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-gray-400">
+                    Cevap Anahtarı
+                  </label>
+
+                  <textarea
+                    name="answerKey"
+                    value={testData.answerKey}
+                    onChange={handleTestChange}
+                    onBlur={handleAnswerKeyBlur}
+                    placeholder="1/A,2/B,3/C …"
+                    rows={3}
+                    className={`
+                      w-full resize-y rounded-lg bg-neutral-800 p-4 text-sm font-mono
+                      tracking-wider leading-relaxed focus:outline-none
+                      focus:ring-2
+                      ${answerKeyErr ? "ring-2 ring-red-600 focus:ring-red-600"
+                                    : "focus:ring-blue-600"}
+                    `}
+                    required
+                  />
+
+                  {/* Sadece metinle uyarı */}
+                  {answerKeyErr && (
+                    <p className="mt-1 text-xs text-red-500">{answerKeyErr}</p>
+                  )}
                 </div>
 
                 <div className="sm:col-span-2">
