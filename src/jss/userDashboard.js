@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { db } from "../firebaseConfig";
 import { useAuth } from "./context/authContext";
+import { useNavigate } from "react-router-dom";
 
 /* ——— Yardımcı: tarih → “gg.aa.yyyy - ss:dd” ——— */
 const fmt = (d) =>
@@ -90,8 +91,10 @@ const SlideList = ({ cats }) =>
   );
 
 /* ——— Test listesi ——— */
-const TestList = ({ cats }) =>
-  cats.length ? (
+const TestList = ({ cats }) => {
+  const navigate = useNavigate();
+
+  return cats.length ? (
     cats.map(({ cat, list }) => {
       const isDeneme = /deneme/i.test(cat);
       return (
@@ -127,11 +130,7 @@ const TestList = ({ cats }) =>
                 {/* Çöz -> optik form */}
                 <button
                   onClick={() =>
-                    window.open(
-                      `/optik?count=${t.questionCount ?? 20}`,
-                      "_self",
-                      "noopener,noreferrer"
-                    )
+                    navigate(`/optik?count=${t.questionCount ?? 20}`)
                   }
                   className="inline-flex w-max items-center justify-center rounded-md bg-blue-700 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600"
                 >
@@ -146,6 +145,7 @@ const TestList = ({ cats }) =>
   ) : (
     <p className="text-xs text-gray-400">Bu sınıf için test yok.</p>
   );
+};
 
 export default function UserDashboard() {
   const { user } = useAuth();
