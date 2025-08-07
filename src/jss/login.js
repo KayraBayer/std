@@ -27,17 +27,17 @@ export default function Login() {
   const { startLoading, stopLoading } = useAuth();
 
   /* ——— State ——— */
-  const [formData, setFormData]     = useState({ email: "", password: "" });
-  const [showPwd,  setShowPwd ]     = useState(false);
-  const [remember, setRemember]     = useState(false);
-  const [loading,  setLoading ]     = useState(false);
-  const [error,    setError   ]     = useState("");
+  const [formData, setFormData]       = useState({ email: "", password: "" });
+  const [showPwd,  setShowPwd ]       = useState(false);
+  const [remember, setRemember]       = useState(false);
+  const [loading,  setLoading ]       = useState(false);
+  const [error,    setError   ]       = useState("");
 
-  const [slides,     setSlides]     = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [slides,     setSlides]       = useState([]);   // [{ category, slides: [] }]
+  const [categories, setCategories]   = useState([]);   // test kategorileri
   const [selectedGrade, setSelectedGrade] = useState(5);
 
-  /* ——— Yardımcı: tarih biçimlendirici ——— */
+  /* ——— Tarih biçimlendirici ——— */
   const fmt = (date) =>
     date?.toLocaleString("tr-TR", {
       day:    "2-digit",
@@ -51,23 +51,33 @@ export default function Login() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        /* Slaytlar */
-        const slideSnap = await getDocs(
-          query(
-            collection(db, "KONU ANLATIM SLAYTLARI"),
-            where("grade", "==", selectedGrade)
-          )
-        );
-        setSlides(
-          slideSnap.docs.map((d) => ({
-            name: d.data().name,
-            link: d.data().link || "",
+        /* ───── SLAYTLAR ───── */
+        const slideCatSnap  = await getDocs(collection(db, "slaytKategoriAdlari"));
+        const slideCatNames = slideCatSnap.docs.map((d) => d.data().name);
+
+        const fetchSlides = async (cat) => {
+          const snap = await getDocs(
+            query(collection(db, cat), where("grade", "==", selectedGrade))
+          );
+          return snap.docs.map((s) => ({
+            name: s.data().name,
+            link: s.data().link || "",
+          }));
+        };
+
+        const slideLists = await Promise.all(
+          slideCatNames.map(async (cat) => ({
+            category: cat,
+            slides:   await fetchSlides(cat),
           }))
         );
 
-        /* Test kategorileri */
-        const catSnap  = await getDocs(collection(db, "kategoriAdlari"));
-        const catNames = catSnap.docs.map((d) => d.data().name);
+        // boş kategorileri çıkar
+        setSlides(slideLists.filter((c) => c.slides.length));
+
+        /* ───── TESTLER ───── */
+        const testCatSnap  = await getDocs(collection(db, "kategoriAdlari"));
+        const testCatNames = testCatSnap.docs.map((d) => d.data().name);
 
         const fetchTests = async (cat) => {
           const snap = await getDocs(
@@ -82,19 +92,19 @@ export default function Login() {
             return {
               name:    data.name,
               link:    data.link || "",
-              closing: end,                // hesaplanmış kapanış zamanı
+              closing: end,          // deneme kapanış zamanı
             };
           });
         };
 
-        const list = await Promise.all(
-          catNames.map(async (cat) => ({
+        const testList = await Promise.all(
+          testCatNames.map(async (cat) => ({
             category: cat,
-            tests: await fetchTests(cat),
+            tests:    await fetchTests(cat),
           }))
         );
 
-        setCategories(list.filter((c) => c.tests.length));
+        setCategories(testList.filter((c) => c.tests.length));
       } catch (err) {
         console.error("Firestore veri çekme hatası:", err);
       }
@@ -129,41 +139,52 @@ export default function Login() {
 
   /* ——— Slayt & Test listeleri ——— */
   const SlideList = () => (
-    <ul className="ml-4 list-disc text-sm">
+    <>
       {slides.length ? (
-        slides.map((s, i) => (
-          <li key={i}>
-            {s.link ? (
-              <a
-                href={s.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-blue-300"
-              >
-                {s.name}
-              </a>
-            ) : (
-              s.name
-            )}
-          </li>
+        slides.map((cat) => (
+          <div key={cat.category} className="mb-4">
+            <p className="font-medium text-green-300">{cat.category}</p>
+
+            <ul className="ml-4 list-disc text-sm space-y-1">
+              {cat.slides.map((s, idx) => (
+                <li key={idx}>
+                  {s.link ? (
+                    <a
+                      href={s.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-blue-300"
+                    >
+                      {s.name}
+                    </a>
+                  ) : (
+                    s.name
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         ))
       ) : (
         <p className="text-xs text-gray-400">Bu sınıf için slayt yok.</p>
       )}
-    </ul>
+    </>
   );
 
   const TestList = () => (
     <>
       {categories.length ? (
         categories.map((cat) => {
-          const isDeneme = /deneme/i.test(cat.category);   // sadece “Deneme” kategorisi
+          const isDeneme = /deneme/i.test(cat.category);
           return (
             <div key={cat.category} className="mb-4">
               <p className="font-medium text-green-300">{cat.category}</p>
               <ul className="ml-4 list-disc text-sm space-y-1">
                 {cat.tests.map((t, idx) => (
-                  <li key={idx} className="flex flex-col md:flex-row md:items-center gap-1">
+                  <li
+                    key={idx}
+                    className="flex flex-col md:flex-row md:items-center gap-1"
+                  >
                     {t.link ? (
                       <a
                         href={t.link}
@@ -177,7 +198,6 @@ export default function Login() {
                       t.name
                     )}
 
-                    {/* ——— Sadece denemeler için kapanış saati ——— */}
                     {isDeneme && t.closing && (
                       <span className="text-xs text-gray-400">
                         kapanış saati: {fmt(t.closing)}

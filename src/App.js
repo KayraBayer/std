@@ -5,6 +5,7 @@ import Login          from "./jss/login";
 import AdminDashboard from "./jss/adminDashboard";
 import UserDashboard  from "./jss/userDashboard";
 import RequireAuth    from "./jss/context/requireAuth";
+import OptikForm from "./jss/components/optikForm";
 
 export default function App() {
   return (
@@ -33,6 +34,8 @@ export default function App() {
                   </RequireAuth>
                 }
               />
+
+              <Route path="/optik" element={<OptikForm />} />
 
               {/* eşleşmeyen rota */}
               <Route path="*" element={<Navigate to="/" replace />} />
