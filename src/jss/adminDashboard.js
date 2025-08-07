@@ -48,7 +48,7 @@ export default function AdminDashboard() {
   };
 
   const fetchSlideCategories = async () => {
-    const snap = await getDocs(collection(db, "kategoriAdlari"));
+    const snap = await getDocs(collection(db, "slaytKategoriAdlari"));
     setSlideCategories(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   };
 
@@ -106,7 +106,7 @@ export default function AdminDashboard() {
     const { name, grade } = newSlideCategory;
     if (!name || !grade) return;
     try {
-      await addDoc(collection(db, "kategoriAdlari"), { name, grade: +grade });
+      await addDoc(collection(db, "slaytKategoriAdlari"), { name, grade: +grade });
       setNewSlideCategory({ name: "", grade: "" });
       fetchSlideCategories();
       alert("Slayt kategorisi eklendi.");

@@ -129,7 +129,7 @@ const TestList = ({ cats }) =>
                   onClick={() =>
                     window.open(
                       `/optik?count=${t.questionCount ?? 20}`,
-                      "_blank",
+                      "_self",
                       "noopener,noreferrer"
                     )
                   }

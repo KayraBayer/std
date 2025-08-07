@@ -225,7 +225,7 @@ export default function Login() {
     >
       <div className="grid w-full max-w-5xl gap-6 md:grid-cols-3">
         {/* SÜTUN 1 — Slaytlar */}
-        <aside className="hidden rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur md:block">
+        <aside className="hidden rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur md:block max-h-[75vh] overflow-y-auto">
           <h2 className="mb-3 text-lg font-semibold text-blue-400">
             Konu Anlatım Slaytları
           </h2>
@@ -315,7 +315,7 @@ export default function Login() {
         </form>
 
         {/* SÜTUN 3 — Testler */}
-        <aside className="hidden rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur md:block">
+        <aside className="hidden rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur md:block max-h-[75vh] overflow-y-auto">
           <h2 className="mb-3 text-lg font-semibold text-blue-400">
             Testler
           </h2>
