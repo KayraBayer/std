@@ -1,16 +1,22 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-// Görünecek sınıf numaraları
 const NAV = [5, 6, 7, 8];
 
 export default function BottomNav({ active, onSelect }) {
-  // active prop’u (seçili sınıf) dizide yoksa 0. index’i kullan
   const idx = Math.max(NAV.indexOf(active), 0);
 
   return (
-    <nav className="fixed bottom-6 left-1/2 z-50 w-[92%] -translate-x-1/2">
-      <div className="relative mx-auto h-16 rounded-3xl bg-neutral-900 shadow-lg">
+    <nav className="fixed bottom-6 left-1/2 z-50 w-[80%] -translate-x-1/2">
+      <div className="relative mx-auto h-16 rounded-3xl bg-neutral-900 shadow-lg px-4">
+        
+        {/* Bombe + Yazı */}
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
+          <div className="h-12 w-28 rounded-full bg-neutral-900 flex items-center justify-center">
+            <span className="text-sm font-medium text-white">Sınıf Seçimi</span>
+          </div>
+        </div>
+
         {/* Notch */}
         <motion.div
           layoutId="notch"

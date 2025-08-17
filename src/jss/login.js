@@ -1,5 +1,5 @@
-// src/jss/login.jsx
-import React, { useState, useEffect } from "react";
+// src/pages/Login.jsx
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   signInWithEmailAndPassword,
@@ -7,344 +7,420 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
 } from "firebase/auth";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import {
-  collection,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  BookOpen,
+  ClipboardList,
+  FileText,
+  ExternalLink,
+  SquareLibrary,
+  Presentation,Layers
+} from "lucide-react";
 import { auth, db } from "../firebaseConfig";
 import { useAuth } from "./context/authContext";
-import bgImage from "../assets/backg.jpg";
-import Logo    from "../assets/logo.png";
+import Logo from "../assets/logo.png";
 import BottomNav from "./components/bottomNav";
+import Spinner from "./components/spinner";
+import { motion } from "framer-motion";
 
 const ADMIN_EMAIL = "admin@mail.com";
 
+/* ——— Dark-Pastel yardımcıları ——— */
+const pastelBadge = {
+  indigo: "bg-indigo-500/10 text-indigo-300 ring-indigo-400/20",
+  emerald: "bg-emerald-500/10 text-emerald-300 ring-emerald-400/20",
+  rose: "bg-rose-500/10 text-rose-300 ring-rose-400/20",
+  slate: "bg-white/5 text-slate-200 ring-white/10",
+};
+const pastelText = {
+  indigo: "text-indigo-300",
+  emerald: "text-emerald-300",
+  rose: "text-rose-300",
+};
+
+const IconBadge = ({ color = "indigo", children, className = "" }) => (
+  <span className={`inline-flex m-1 h-7 w-7 items-center justify-center rounded-full ring-1 ${pastelBadge[color]} ${className}`}>
+    {children}
+  </span>
+);
+
+const SectionHeader = ({ icon: Icon, color = "indigo", children }) => (
+  <div className="mb-3 flex items-center gap-2">
+    <IconBadge color={color}>
+      <Icon className="h-4 w-4" />
+    </IconBadge>
+    <h2 className={`text-base font-semibold ${pastelText[color]}`}>{children}</h2>
+  </div>
+);
+
+const Card = ({ className = "", children }) => (
+  <div className={`rounded-xl border border-white/10 bg-neutral-900 shadow-sm ${className}`}>
+    {children}
+  </div>
+);
+
+/* ——— Mobil için stabil Collapsible (dark) ——— */
+const Collapsible = ({ title, icon: Icon, color = "indigo", children }) => {
+  const [open, setOpen] = useState(false);
+  const [maxH, setMaxH] = useState(0);
+  const contentRef = useRef(null);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => setMaxH(el.scrollHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    const t = setTimeout(measure, 50);
+    return () => {
+      ro.disconnect();
+      clearTimeout(t);
+    };
+  }, [children, open]);
+
+  return (
+    <Card>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between rounded-xl border-b border-white/10 px-4 py-3 text-left text-[15px] font-semibold text-slate-200 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+      >
+        <span className="inline-flex items-center gap-2">
+          <IconBadge color={color}>
+            <Icon className="h-4 w-4" />
+          </IconBadge>
+          {title}
+        </span>
+        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.25 }} className="text-slate-400">
+          ▼
+        </motion.span>
+      </button>
+
+      <motion.div
+        initial={false}
+        animate={open ? { maxHeight: maxH, opacity: 1 } : { maxHeight: 0, opacity: 0 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        className="overflow-hidden"
+      >
+        {/* Mobilde içerik uzun ise kart içi scroll */}
+        <div ref={contentRef} className="max-h-72 overflow-y-auto px-4 pb-4 pt-3">
+          {children}
+        </div>
+      </motion.div>
+    </Card>
+  );
+};
+
+/* ——— Liste bileşenleri (dark-pastel) ——— */
+const SlideList = ({ items = [] }) =>
+  items.length ? (
+    <div className="space-y-4">
+      {items.map((cat) => (
+        <div key={cat.category} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <IconBadge color="indigo">
+              <BookOpen className="h-4 w-4" />
+            </IconBadge>
+            <p className="text-sm font-medium text-indigo-300">{cat.category}</p>
+          </div>
+          <ul className="space-y-1.5 text-sm leading-6 text-slate-300">
+            {cat.slides.map((s, idx) => (
+              <li key={idx} className="flex items-center gap-2">
+                <IconBadge color="indigo" className="h-6 w-6">
+                  <FileText className="h-3.5 w-3.5" />
+                </IconBadge>
+                {s.link ? (
+                  <a
+                    href={s.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 underline decoration-indigo-700/40 underline-offset-2 hover:text-indigo-300"
+                  >
+                    {s.name}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : (
+                  s.name
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p className="text-xs text-slate-400">Bu sınıf için slayt yok.</p>
+  );
+
+const TestList = ({ items = [] }) =>
+  items.length ? (
+    <div className="space-y-4">
+      {items.map((cat) => (
+        <div key={cat.category} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <IconBadge color="emerald">
+              <SquareLibrary className="h-4 w-4" />
+            </IconBadge>
+            <p className="text-sm font-medium text-emerald-300">{cat.category}</p>
+          </div>
+          <ul className="space-y-1.5 text-sm leading-6 text-slate-300">
+            {cat.tests.map((t, idx) => (
+              <li key={idx} className="flex items-center gap-2">
+                <IconBadge color="emerald" className="h-6 w-6">
+                  <ClipboardList className="h-3.5 w-3.5" />
+                </IconBadge>
+                {t.link ? (
+                  <a
+                    href={t.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 underline decoration-emerald-700/40 underline-offset-2 hover:text-emerald-300"
+                  >
+                    {t.name}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : (
+                  t.name
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p className="text-xs text-slate-400">Bu sınıf için test yok.</p>
+  );
+
 export default function Login() {
-  const navigate   = useNavigate();
+  const navigate = useNavigate();
   const { startLoading, stopLoading } = useAuth();
 
-  /* ——— State ——— */
-  const [formData, setFormData]       = useState({ email: "", password: "" });
-  const [showPwd,  setShowPwd ]       = useState(false);
-  const [remember, setRemember]       = useState(false);
-  const [loading,  setLoading ]       = useState(false);
-  const [error,    setError   ]       = useState("");
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [showPwd, setShowPwd] = useState(false);
+  const [remember, setRemember] = useState(false);
 
-  const [slides,     setSlides]       = useState([]);   // [{ category, slides: [] }]
-  const [categories, setCategories]   = useState([]);   // test kategorileri
+  const [loading, setLoading] = useState(false); // giriş spinner
+  const [error, setError] = useState("");
+
+  const [slides, setSlides] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [selectedGrade, setSelectedGrade] = useState(5);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
-  /* ——— Tarih biçimlendirici ——— */
-  const fmt = (date) =>
-    date?.toLocaleString("tr-TR", {
-      day:    "2-digit",
-      month:  "2-digit",
-      year:   "numeric",
-      hour:   "2-digit",
-      minute: "2-digit",
-    });
-
-  /* ——— Firestore’dan veri çek ——— */
+  // veri çek
   useEffect(() => {
     const fetchData = async () => {
+      setIsLoadingData(true);
       try {
-        /* ───── SLAYTLAR ───── */
-        const slideCatSnap  = await getDocs(collection(db, "slaytKategoriAdlari"));
+        // Slayt kategorileri
+        const slideCatSnap = await getDocs(collection(db, "slaytKategoriAdlari"));
         const slideCatNames = slideCatSnap.docs.map((d) => d.data().name);
 
         const fetchSlides = async (cat) => {
-          const snap = await getDocs(
-            query(collection(db, cat), where("grade", "==", selectedGrade))
-          );
-          return snap.docs.map((s) => ({
-            name: s.data().name,
-            link: s.data().link || "",
-          }));
+          const snap = await getDocs(query(collection(db, cat), where("grade", "==", selectedGrade)));
+          return snap.docs.map((s) => ({ name: s.data().name, link: s.data().link || "" }));
         };
 
         const slideLists = await Promise.all(
           slideCatNames.map(async (cat) => ({
             category: cat,
-            slides:   await fetchSlides(cat),
+            slides: (await fetchSlides(cat)).sort((a, b) => a.name.localeCompare(b.name, "tr", { sensitivity: "base" })),
           }))
         );
 
-        // boş kategorileri çıkar
-        setSlides(slideLists.filter((c) => c.slides.length));
+        setSlides(
+          slideLists
+            .filter((c) => c.slides.length)
+            .sort((a, b) => a.category.localeCompare(b.category, "tr", { sensitivity: "base" }))
+        );
 
-        /* ───── TESTLER ───── */
-        const testCatSnap  = await getDocs(collection(db, "kategoriAdlari"));
+        // Test kategorileri
+        const testCatSnap = await getDocs(collection(db, "kategoriAdlari"));
         const testCatNames = testCatSnap.docs.map((d) => d.data().name);
 
         const fetchTests = async (cat) => {
-          const snap = await getDocs(
-            query(collection(db, cat), where("grade", "==", selectedGrade))
-          );
+          const snap = await getDocs(query(collection(db, cat), where("grade", "==", selectedGrade)));
           return snap.docs.map((t) => {
-            const data   = t.data();
-            const start  = data.createdAt?.toDate?.() ?? null;
-            const end    = start
-              ? new Date(start.getTime() + (data.duration || 0) * 60_000)
-              : null;
-            return {
-              name:    data.name,
-              link:    data.link || "",
-              closing: end,          // deneme kapanış zamanı
-            };
+            const data = t.data();
+            const start = data.createdAt?.toDate?.() ?? null;
+            const end = start ? new Date(start.getTime() + (data.duration || 0) * 60_000) : null;
+            return { name: data.name, link: data.link || "", closing: end };
           });
         };
 
         const testList = await Promise.all(
           testCatNames.map(async (cat) => ({
             category: cat,
-            tests:    await fetchTests(cat),
+            tests: (await fetchTests(cat)).sort((a, b) => a.name.localeCompare(b.name, "tr", { sensitivity: "base" })),
           }))
         );
 
-        setCategories(testList.filter((c) => c.tests.length));
+        setCategories(
+          testList
+            .filter((c) => c.tests.length)
+            .sort((a, b) => a.category.localeCompare(b.category, "tr", { sensitivity: "base" }))
+        );
       } catch (err) {
         console.error("Firestore veri çekme hatası:", err);
+      } finally {
+        setIsLoadingData(false);
       }
     };
 
     fetchData();
   }, [selectedGrade]);
 
-  /* ——— Login formu gönder ——— */
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
     startLoading();
-    setError("");
 
     try {
-      await setPersistence(
-        auth,
-        remember ? browserLocalPersistence : browserSessionPersistence
-      );
-      const { user } = await signInWithEmailAndPassword(
-        auth, formData.email, formData.password
-      );
+      await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+      const { user } = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       navigate(user.email === ADMIN_EMAIL ? "/admin" : "/dashboard");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Giriş başarısız.");
     } finally {
       setLoading(false);
       stopLoading();
     }
   };
 
-  /* ——— Slayt & Test listeleri ——— */
-  const SlideList = () => (
-    <>
-      {slides.length ? (
-        slides.map((cat) => (
-          <div key={cat.category} className="mb-4">
-            <p className="font-medium text-green-300">{cat.category}</p>
-
-            <ul className="ml-4 list-disc text-sm space-y-1">
-              {cat.slides.map((s, idx) => (
-                <li key={idx}>
-                  {s.link ? (
-                    <a
-                      href={s.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-blue-300"
-                    >
-                      {s.name}
-                    </a>
-                  ) : (
-                    s.name
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))
-      ) : (
-        <p className="text-xs text-gray-400">Bu sınıf için slayt yok.</p>
-      )}
-    </>
-  );
-
-  const TestList = () => (
-    <>
-      {categories.length ? (
-        categories.map((cat) => {
-          const isDeneme = /deneme/i.test(cat.category);
-          return (
-            <div key={cat.category} className="mb-4">
-              <p className="font-medium text-green-300">{cat.category}</p>
-              <ul className="ml-4 list-disc text-sm space-y-1">
-                {cat.tests.map((t, idx) => (
-                  <li
-                    key={idx}
-                    className="flex flex-col md:flex-row md:items-center gap-1"
-                  >
-                    {t.link ? (
-                      <a
-                        href={t.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline hover:text-blue-300"
-                      >
-                        {t.name}
-                      </a>
-                    ) : (
-                      t.name
-                    )}
-
-                    {isDeneme && t.closing && (
-                      <span className="text-xs text-gray-400">
-                        kapanış saati: {fmt(t.closing)}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })
-      ) : (
-        <p className="text-xs text-gray-400">Bu sınıf için test yok.</p>
-      )}
-    </>
-  );
-
-  /* ——— UI ——— */
   return (
-    <section
-      className="relative flex min-h-screen flex-col items-center
-                justify-center bg-cover bg-center px-4 py-8
-                pb-[calc(88px+env(safe-area-inset-bottom))]"
-      style={{ backgroundImage: `url(${bgImage})` }}
-    >
-      <div className="grid w-full max-w-5xl gap-6 md:grid-cols-3">
-        {/* SÜTUN 1 — Slaytlar */}
-        <aside className="hidden rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur md:block max-h-[75vh] overflow-y-auto">
-          <h2 className="mb-3 text-lg font-semibold text-blue-400">
-            Konu Anlatım Slaytları
-          </h2>
-          <SlideList />
-        </aside>
+    <section className="relative min-h-screen bg-neutral-950 px-4 py-6 pb-[calc(88px+env(safe-area-inset-bottom))] text-slate-200">
+      {/* Tam ekran giriş spinner overlay */}
+      {loading && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/60 backdrop-blur-sm">
+          <Spinner size={40} label="Giriş yapılıyor..." />
+        </div>
+      )}
 
-        {/* SÜTUN 2 — Giriş formu */}
-        <form
-          onSubmit={handleSubmit}
-          className="relative mx-auto w-full max-w-sm space-y-6 rounded-xl bg-neutral-900/70 p-8 shadow-2xl ring-1 ring-neutral-700/60 backdrop-blur"
-        >
-          {/* Logo */}
-          <div className="absolute left-1/2 -top-[30px] z-10 flex h-[100px] w-[100px] -translate-x-1/2 items-center justify-center overflow-hidden rounded-full bg-neutral-800/80 ring-1 ring-neutral-600/60 backdrop-blur">
-            <img src={Logo} alt="Site Logosu" className="h-full w-full object-contain" />
+      {/* LOGO — kartların üstünde, ortalanmış */}
+      <div className="mx-auto mb-3 flex max-w-6xl items-center justify-center">
+        <img src={Logo} alt="Site Logosu" className="h-10 w-auto opacity-90 md:h-36" />
+      </div>
+
+      {/* Masaüstünde sabit yükseklikli üçlü düzen */}
+      <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-3 items-stretch">
+        {/* SOL: Slaytlar (sabit yükseklik + iç scroll) */}
+        <Card className="hidden md:flex md:h-[400px] flex-col p-4">
+          <SectionHeader icon={Presentation} color="indigo">Konu Anlatım Slaytları</SectionHeader>
+          <div className="mt-1 min-h-0 flex-1 overflow-y-auto pr-1">
+            {isLoadingData ? <Spinner label="Slaytlar yükleniyor..." /> : <SlideList items={slides} />}
           </div>
+        </Card>
 
-          <h1 className="pt-10 text-center text-2xl font-semibold text-gray-200">
-            Giriş Yap
-          </h1>
+        {/* ORTA: Giriş formu (sabit yükseklik) */}
+       {/* ORTA: Giriş formu (sabit yükseklik, alt sabit aksiyonlar) */}
+      <Card className="relative mx-auto w-full max-w-md md:h-[400px] p-5 flex flex-col">
+        <h1 className="text-center text-xl font-extrabold tracking-tight text-slate-100">Giriş Yap</h1>
 
-          {error && (
-            <p className="rounded-md bg-red-500/20 p-2 text-sm text-red-300">
-              {error}
-            </p>
-          )}
+        {error && (
+          <div className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300 ring-1 ring-rose-400/20">
+            {error}
+          </div>
+        )}
 
-          {/* E-posta */}
-          <div className="space-y-4">
+        {/* formu tüm yüksekliği kaplayacak ve alt aksiyonları dibe itecek şekilde flex yapıyoruz */}
+        <form onSubmit={handleSubmit} className="mt-4 flex min-h-0 flex-1 flex-col">
+          {/* ÜST: alanlar */}
+          <div className="space-y-3">
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="email"
                 name="email"
                 placeholder="e-mail"
                 value={formData.email}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, email: e.target.value }))
-                }
-                className="w-full rounded-md border border-neutral-700 bg-neutral-800/70 py-3 pl-10 pr-3 text-sm text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+                className="w-full rounded-md border border-white/10 bg-neutral-900 py-3 pl-10 pr-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
               />
             </div>
 
-            {/* Şifre */}
             <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type={showPwd ? "text" : "password"}
                 name="password"
                 placeholder="şifre"
                 value={formData.password}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, password: e.target.value }))
-                }
-                className="w-full rounded-md border border-neutral-700 bg-neutral-800/70 py-3 pl-10 pr-10 text-sm text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
+                className="w-full rounded-md border border-white/10 bg-neutral-900 py-3 pl-10 pr-10 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPwd((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                aria-label={showPwd ? "Şifreyi gizle" : "Şifreyi göster"}
               >
                 {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
 
-          {/* Beni hatırla */}
-          <label className="flex items-center gap-2 pt-1 text-xs text-gray-400">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={() => setRemember(!remember)}
-              className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-blue-500 focus:ring-0"
-            />
-            Beni Hatırla
-          </label>
+          {/* ALT: aksiyonlar — dibe sabit */}
+          <div className="mt-auto space-y-3 pt-2">
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={() => setRemember(!remember)}
+                className="h-4 w-4 rounded border-white/20 bg-neutral-900 text-indigo-500 focus:ring-indigo-500"
+              />
+              Beni Hatırla
+            </label>
 
-          {/* Gönder */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-gradient-to-r from-blue-700 to-blue-900 py-3 text-sm font-medium tracking-wide text-white hover:from-blue-600 hover:to-blue-800 disabled:opacity-60"
-          >
-            {loading ? "Signing in..." : "Giriş"}
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-md bg-indigo-600 py-3 text-sm font-semibold text-white shadow-sm ring-1 ring-indigo-700/20 transition-colors hover:bg-indigo-500 disabled:opacity-60"
+            >
+              {loading ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Spinner size={18} />
+                  Giriş yapılıyor...
+                </span>
+              ) : (
+                "Giriş"
+              )}
+            </button>
+          </div>
         </form>
+      </Card>
 
-        {/* SÜTUN 3 — Testler */}
-        <aside className="hidden rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur md:block max-h-[75vh] overflow-y-auto">
-          <h2 className="mb-3 text-lg font-semibold text-blue-400">
-            Testler
-          </h2>
-          <TestList />
-        </aside>
+        {/* SAĞ: Testler (sabit yükseklik + iç scroll) */}
+        <Card className="hidden md:flex md:h-[400px] flex-col p-4">
+          <SectionHeader icon={Layers} color="emerald">Testler</SectionHeader>
+          <div className="mt-1 min-h-0 flex-1 overflow-y-auto pr-1">
+            {isLoadingData ? <Spinner label="Testler yükleniyor..." /> : <TestList items={categories} />}
+          </div>
+        </Card>
       </div>
 
-      {/* ——— Mobil görünüm ——— */}
-      <div className="mt-6 w-full max-w-sm space-y-4 md:hidden">
-        <details className="rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur">
-          <summary className="cursor-pointer text-lg font-semibold text-blue-400">
-            Konu Anlatım Slaytları
-          </summary>
-          <SlideList />
-        </details>
-
-        <details className="rounded-xl bg-neutral-900/70 p-4 text-gray-200 shadow ring-1 ring-neutral-700/60 backdrop-blur">
-          <summary className="cursor-pointer text-lg font-semibold text-blue-400">
-            Testler
-          </summary>
-          <TestList />
-        </details>
+      {/* Mobil: kısa tut + scroll içeride */}
+      <div className="mx-auto mt-4 w-full max-w-md space-y-3 md:hidden">
+        <Collapsible title="Konu Anlatım Slaytları" icon={BookOpen} color="indigo">
+          {isLoadingData ? <Spinner label="Slaytlar yükleniyor..." /> : <SlideList items={slides} />}
+        </Collapsible>
+        <Collapsible title="Testler" icon={SquareLibrary} color="emerald">
+          {isLoadingData ? <Spinner label="Testler yükleniyor..." /> : <TestList items={categories} />}
+        </Collapsible>
       </div>
 
-      <BottomNav
-        className="fixed inset-x-0 bottom-0 z-20"
-        active={selectedGrade}
-        onSelect={setSelectedGrade}
-      />
+      {/* Alt navbar marjı */}
+      <div className="mx-auto mt-4 max-w-6xl">
+        <BottomNav active={selectedGrade} onSelect={setSelectedGrade} />
+      </div>
     </section>
   );
 }

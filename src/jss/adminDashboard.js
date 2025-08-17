@@ -6,12 +6,14 @@ import {
 } from "firebase/auth";
 import {
   addDoc,
-  setDoc,
-  doc,
   collection,
   getCountFromServer,
   getDocs,
   serverTimestamp,
+  setDoc,
+  doc,
+  updateDoc,
+  FieldPath,
 } from "firebase/firestore";
 import { auth, db, secondaryAuth } from "../firebaseConfig";
 
@@ -20,9 +22,9 @@ const ANSWER_KEY_REGEX = /^[A-D]+$/i;          // Sadece A-D harfleri, aralıks�
 
 /* ——— Geçici parola üreticisi ——— */
 const genTempPass = () =>
-  Array.from({ length: 10 }, () =>
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".charAt(
-      Math.floor(Math.random() * 62)
+  Array.from({ length: 6 }, () =>
+    "0123456789".charAt(
+      Math.floor(Math.random() * 10)
     )
   ).join("");
 
@@ -63,6 +65,7 @@ export default function AdminDashboard() {
   const [studentForm, setStudentForm] = useState({
     email: "", firstName: "", lastName: "", password: "",
   });
+
   const handleStudentChange = (e) =>
     setStudentForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
@@ -71,19 +74,40 @@ export default function AdminDashboard() {
     const { email, firstName, lastName, password } = studentForm;
     if (!email || !firstName || !lastName || !password) return;
 
-    try {
-      await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    let cred = null;
 
-      const fullName = `${firstName.trim()} ${lastName.trim()}`;
-      await setDoc(doc(db, "students", fullName), {
-        email, firstName, lastName, createdAt: serverTimestamp(),
+    try {
+      // 1) Auth: secondary ile kullanıcı oluştur (admin oturumunu bozmadan)
+      cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const uid = cred.user.uid;
+
+      // 2) Firestore: öğrenciyi UID ile yaz
+      await setDoc(doc(db, "students", uid), {
+        email: String(email).toLowerCase(),
+        firstName,
+        lastName,
+        createdAt: serverTimestamp(),
       });
 
-      await sendPasswordResetEmail(auth, email);
+      const key = `${firstName}_${lastName}`.toLowerCase(); // koleksiyon adı olarak kullandığın biçim
+
+      // 1) (Opsiyonel) ogrenciAdlari/<uid> belgesini koru/merge et
+      await setDoc(doc(db, "ogrenciAdlari", uid), { fullname: key }, { merge: true });
+
+      // 2) ogrenciAdlari/_index içindeki names[key] = true yap
+      const indexRef = doc(db, "ogrenciAdlari", "_index");
+
+      // index yoksa önce oluştur, sonra güvenli şekilde field-path ile güncelle
+      await setDoc(indexRef, { names: {} }, { merge: true });
+      await updateDoc(indexRef, new FieldPath("names", key), true);
+
+      // 4) UI: formu temizle, istatistikleri yenile
       setStudentForm({ email: "", firstName: "", lastName: "", password: "" });
-      fetchStats();
+      if (typeof fetchStats === "function") await fetchStats();
       alert("Öğrenci eklendi.");
-    } catch (err) { alert(err.message); }
+    } catch (err) {
+        alert(err?.message || "Bir hata oluştu.");
+    }
   };
 
   /* ────────────────── TEST kategorisi ekleme ────────────────── */
@@ -198,14 +222,13 @@ export default function AdminDashboard() {
 
   const handleAddExam = async (e) => {
     e.preventDefault();
-    const { grade, name, questionCount, duration, link } = examData;
-    if (!grade || !name || !questionCount || !duration || !link) return;
+    const { grade, name, questionCount, link } = examData;
+    if (!grade || !name || !questionCount || !link) return;
 
     try {
       await addDoc(collection(db, "HAFTALIK DENEMELER"), {
         grade: +grade, name,
         questionCount: +questionCount,
-        duration: +duration,
         link,
         createdAt: serverTimestamp(),
       });
